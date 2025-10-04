@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Clock, Repeat, Footprints, Volume2, VolumeX, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Pause, RotateCcw, Clock, Repeat, Footprints, Volume2, VolumeX, ChevronDown, ChevronUp, Music } from 'lucide-react';
 
 export default function App() {
     const [isRunning, setIsRunning] = useState(false);
@@ -9,6 +9,43 @@ export default function App() {
     const [isMuted, setIsMuted] = useState(false); // 控制步频声音
     const [showSettings, setShowSettings] = useState(false);
     const [isAudioInitialized, setIsAudioInitialized] = useState(false);
+    const [selectedBeatSound, setSelectedBeatSound] = useState('snare_drum_hard'); // 默认音效
+
+    // 完整的音效列表（根据您提供的文件名）
+    const beatSounds = [
+        { id: '808_kick_hard', name: '808底鼓(强)', file: '808_kick_hard.mp3' },
+        { id: '808_kick_soft', name: '808底鼓(弱)', file: '808_kick_soft.mp3' },
+        { id: '808_snare_hard', name: '808军鼓(强)', file: '808_snare_hard.mp3' },
+        { id: '808_snare_soft', name: '808军鼓(弱)', file: '808_snare_soft.mp3' },
+        { id: '909_kick_hard', name: '909底鼓(强)', file: '909_kick_hard.mp3' },
+        { id: '909_kick_soft', name: '909底鼓(弱)', file: '909_kick_soft.mp3' },
+        { id: '909_snare_hard', name: '909军鼓(强)', file: '909_snare_hard.mp3' },
+        { id: '909_snare_soft', name: '909军鼓(弱)', file: '909_snare_soft.mp3' },
+        { id: 'beep_hard', name: '蜂鸣声(强)', file: 'beep_hard.mp3' },
+        { id: 'beep_soft', name: '蜂鸣声(弱)', file: 'beep_soft.mp3' },
+        { id: 'bongo_drum_hard', name: '邦戈鼓(强)', file: 'bongo_drum_hard.mp3' },
+        { id: 'bongo_drum_soft', name: '邦戈鼓(弱)', file: 'bongo_drum_soft.mp3' },
+        { id: 'clave_hard', name: '克拉韦(强)', file: 'clave_hard.mp3' },
+        { id: 'clave_soft', name: '克拉韦(弱)', file: 'clave_soft.mp3' },
+        { id: 'click_hard', name: '点击声(强)', file: 'click_hard.mp3' },
+        { id: 'click_soft', name: '点击声(弱)', file: 'click_soft.mp3' },
+        { id: 'clock_tick_hard', name: '钟表滴答(强)', file: 'clock_tick_hard.mp3' },
+        { id: 'clock_tick_soft', name: '钟表滴答(弱)', file: 'clock_tick_soft.mp3' },
+        { id: 'cowbell_hard', name: '牛铃(强)', file: 'cowbell_hard.mp3' },
+        { id: 'cowbell_soft', name: '牛铃(弱)', file: 'cowbell_soft.mp3' },
+        { id: 'hammer_hit_hard', name: '锤击声(强)', file: 'hammer_hit_hard.mp3' },
+        { id: 'hammer_hit_soft', name: '锤击声(弱)', file: 'hammer_hit_soft.mp3' },
+        { id: 'kick_drum_hard', name: '底鼓(强)', file: 'kick_drum_hard.mp3' },
+        { id: 'kick_drum_soft', name: '底鼓(弱)', file: 'kick_drum_soft.mp3' },
+        { id: 'metronome_click_hard', name: '节拍器(强)', file: 'metronome_click_hard.mp3' },
+        { id: 'metronome_click_soft', name: '节拍器(弱)', file: 'metronome_click_soft.mp3' },
+        { id: 'snare_drum_hard', name: '军鼓(强)', file: 'snare_drum_hard.mp3' },
+        { id: 'snare_drum_soft', name: '军鼓(弱)', file: 'snare_drum_soft.mp3' },
+        { id: 'woodblock_hard', name: '木鱼(强)', file: 'woodblock_hard.mp3' },
+        { id: 'woodblock_soft', name: '木鱼(弱)', file: 'woodblock_soft.mp3' },
+        { id: 'woodfish_hard', name: '木鱼声(强)', file: 'woodfish_hard.mp3' },
+        { id: 'woodfish_soft', name: '木鱼声(弱)', file: 'woodfish_soft.mp3' }
+    ];
 
     const [settings, setSettings] = useState({
         runTime: 60, // seconds
@@ -19,9 +56,10 @@ export default function App() {
 
     const [tempSettings, setTempSettings] = useState(settings);
     const intervalRef = useRef(null);
-    const cadenceTimeoutRef = useRef(null); // 使用 setTimeout 而不是 setInterval
+    const cadenceTimeoutRef = useRef(null);
     const audioContextRef = useRef(null);
     const gainNodeRef = useRef(null);
+    const audioBuffersRef = useRef(new Map()); // 存储加载的音频缓冲区
 
     // Initialize audio context on first user interaction
     const initAudio = () => {
@@ -35,6 +73,24 @@ export default function App() {
             } catch (error) {
                 console.error('Audio initialization failed:', error);
             }
+        }
+    };
+
+    // Load audio file and store in buffer
+    const loadAudioBuffer = async (soundId, filePath) => {
+        try {
+            if (audioBuffersRef.current.has(soundId)) {
+                return audioBuffersRef.current.get(soundId);
+            }
+
+            const response = await fetch(filePath);
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+            audioBuffersRef.current.set(soundId, audioBuffer);
+            return audioBuffer;
+        } catch (error) {
+            console.error(`Failed to load audio file ${filePath}:`, error);
+            return null;
         }
     };
 
@@ -60,25 +116,59 @@ export default function App() {
         }
     };
 
+    // Play custom beat sound
+    const playCustomBeat = async () => {
+        if (isWalking || !isRunning || isMuted) return;
+
+        if (!audioContextRef.current || !gainNodeRef.current) return;
+
+        try {
+            // 找到选中的音效
+            const selectedSound = beatSounds.find(sound => sound.id === selectedBeatSound);
+            if (!selectedSound) return;
+
+            // 加载音频缓冲区
+            const audioBuffer = await loadAudioBuffer(
+                selectedSound.id,
+                `/mp3/${selectedSound.file}`
+            );
+
+            if (!audioBuffer) {
+                // 如果自定义音效加载失败，回退到默认蜂鸣声
+                playBeep(660, 0.05, false);
+                return;
+            }
+
+            // 播放自定义音效
+            const source = audioContextRef.current.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(gainNodeRef.current);
+            source.start();
+
+            // 自动清理
+            source.onended = () => {
+                source.disconnect();
+            };
+        } catch (error) {
+            console.error('Custom beat sound failed:', error);
+            // 回退到默认蜂鸣声
+            playBeep(660, 0.05, false);
+        }
+    };
+
     // Schedule next cadence beat
     const scheduleNextCadenceBeat = () => {
         if (!isRunning || isWalking || cadenceTimeoutRef.current) return;
 
         const cadenceInterval = (60 / settings.cadence) * 1000;
         cadenceTimeoutRef.current = setTimeout(() => {
-            playCadenceBeat();
+            playCustomBeat();
             cadenceTimeoutRef.current = null;
             // Schedule the next beat only if we're still running and in running phase
             if (isRunning && !isWalking) {
                 scheduleNextCadenceBeat();
             }
         }, cadenceInterval);
-    };
-
-    // Play cadence beat (only during running phase)
-    const playCadenceBeat = () => {
-        if (isWalking || !isRunning) return;
-        playBeep(660, 0.05, false); // Respect mute setting for cadence
     };
 
     // Start cadence timer
@@ -190,12 +280,20 @@ export default function App() {
         }
     }, [isMuted, isRunning, isWalking]);
 
-    // Handle settings changes that affect cadence
+    // Handle beat sound change
     useEffect(() => {
-        if (isRunning && !isWalking) {
+        if (isRunning && !isWalking && !isMuted) {
+            // 当音效改变时，重新开始节拍器以使用新音效
             startCadenceTimer();
         }
-    }, [settings.cadence, isRunning, isWalking]);
+    }, [selectedBeatSound, isRunning, isWalking, isMuted]);
+
+    // Handle settings changes that affect cadence
+    useEffect(() => {
+        if (isRunning && !isWalking && !isMuted) {
+            startCadenceTimer();
+        }
+    }, [settings.cadence, isRunning, isWalking, isMuted]);
 
     const handleStart = () => {
         // Initialize audio on start (this ensures audio works on first start)
@@ -207,14 +305,14 @@ export default function App() {
             setCurrentCycle(1);
             // Start cadence immediately if we're in running phase
             setTimeout(() => {
-                if (isRunning && !isWalking) {
+                if (isRunning && !isWalking && !isMuted) {
                     startCadenceTimer();
                 }
             }, 100);
         } else if (!isWalking) {
             // If resuming in running phase, start cadence
             setTimeout(() => {
-                if (isRunning && !isWalking) {
+                if (isRunning && !isWalking && !isMuted) {
                     startCadenceTimer();
                 }
             }, 100);
@@ -260,6 +358,12 @@ export default function App() {
         setTimeout(() => playBeep(440, 0.2, true), 300);
     };
 
+    // Test beat sound function
+    const testBeatSound = async () => {
+        initAudio();
+        await playCustomBeat();
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 text-white">
             {/* Header */}
@@ -295,6 +399,8 @@ export default function App() {
                             {isRunning && !isWalking && (
                                 <div className="text-xs text-green-300 mt-1">
                                     步频节拍: {settings.cadence} 步/分钟 {isMuted && '(已静音)'}
+                                    <br />
+                                    音效: {beatSounds.find(s => s.id === selectedBeatSound)?.name || '军鼓(强)'}
                                 </div>
                             )}
                         </div>
@@ -345,6 +451,51 @@ export default function App() {
                                 className="bg-white/20 hover:bg-white/30 px-4 py-2.5 rounded-full flex items-center gap-2 font-semibold transition-all duration-200 min-w-[80px]"
                             >
                                 {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                            </button>
+                        </div>
+
+                        {/* Beat Sound Selection - 修复样式问题 */}
+                        <div className="mb-4">
+                            <label className="flex items-center gap-2 text-blue-200 mb-2 text-sm">
+                                <Music size={14} />
+                                节拍器音效
+                            </label>
+                            <select
+                                value={selectedBeatSound}
+                                onChange={(e) => setSelectedBeatSound(e.target.value)}
+                                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-sm appearance-none cursor-pointer"
+                                disabled={isRunning}
+                                style={{
+                                    WebkitAppearance: 'none',
+                                    MozAppearance: 'none',
+                                    appearance: 'none',
+                                    color: 'white',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                                }}
+                            >
+                                {beatSounds.map(sound => (
+                                    <option
+                                        key={sound.id}
+                                        value={sound.id}
+                                        style={{
+                                            backgroundColor: '#1a2a6c',
+                                            color: 'white'
+                                        }}
+                                    >
+                                        {sound.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {/* 下拉箭头图标 */}
+                            <div className="relative -mt-7 ml-auto w-6 h-6 flex items-center justify-center pointer-events-none">
+                                <ChevronDown size={16} className="text-blue-200" />
+                            </div>
+                            <button
+                                onClick={testBeatSound}
+                                className="mt-2 text-xs text-cyan-300 hover:text-cyan-200 underline"
+                                disabled={!isAudioInitialized}
+                            >
+                                测试音效
                             </button>
                         </div>
 
